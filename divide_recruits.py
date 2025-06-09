@@ -56,10 +56,12 @@ def divide():
 	leading = divide_start()
 	while (header_line := get_header()):
 		header = load_header([header_line])
-		content = get_content()
+		content, end_line = get_content()
 		header_content = HeaderContent(header=header, content=content)
 		pp(header_content.header)
 		print()
+		if end_line:
+			break
 	print()
 	print()
 	print(leading)
@@ -99,6 +101,7 @@ def get_header():
 			break
 	if not header:
 		raise ValueError("No Header line!")	
+	closing_header_line = False
 	while len(LINES) > 0:
 		line = LINES.pop()
 		if not line:
@@ -109,25 +112,32 @@ def get_header():
 				case LineSeparator.END_LINE_SEP:
 					raise EOFError("End of contents.")
 				case LineSeparator.HEARDER_LINE_SEP:
-					return header
-	raise ValueError("No closing Header line!")	
+					closing_header_line = True
+					break
+		else:
+			header += line
+	if not closing_header_line:
+		raise ValueError("No closing Header line!")	
+	return header
 
 def get_content():
 	content = []
+	end_line = False
 	while len(LINES) > 0:
 		line = LINES.pop()
 		sep = is_separator(line)
 		if sep:
 			match sep:
 				case LineSeparator.END_LINE_SEP:
-					raise EOFError("End of contents.")
+					end_line = True
+					break
 				case LineSeparator.HEARDER_LINE_SEP:
 					break
 		else:
 			content.append(line)
 	if not content:
 		raise ValueError("No content!")	
-	return content
+	return content, end_line
 
 def load_header(lines):
 	line = None
