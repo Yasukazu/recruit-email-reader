@@ -158,6 +158,17 @@ def load_header(lines):
 		raise ValueError("No Bosyu number!")
 	return Header(int(tokens[0][i:]), tokens[1])
 
+DATE_TIME_BRACKET_PAIR = '【】'
+WEEKDAYS_KANJI = '日月火水木金土'
+
+class JobDateTime(Enum):
+	KIKAN = ('募集期間', rf"(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)～(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)", '')
+	JIKAN = ('時間', r"(\d+):(\d+)～(\d+):(\d+)", "勤務可能な方")
+
+	def bracket(self):
+		return f"【{self.name}】"
+	def pattern(self):
+		return re.compile(self.value[0])
 
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
