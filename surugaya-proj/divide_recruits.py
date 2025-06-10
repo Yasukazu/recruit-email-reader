@@ -7,6 +7,7 @@ import re
 from collections import deque
 from pprint import pp
 from pathlib import Path
+from unicodedata import normalize
 
 HEARDER_LINE = '==='
 END_LINE = '---'
@@ -21,13 +22,17 @@ DATE_TIME_BRACKET_PAIR = '【】'
 WEEKDAYS_KANJI = '日月火水木金土'
 
 class JobDateTime(Enum):
-	KIKAN = ('募集期間', rf"(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)～(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)", '')
-	JIKAN = ('時間', r"(\d+):(\d+)～(\d+):(\d+)", "勤務可能な方")
+	KIKAN = ('募集期間', re.compile(rf"(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)"), '')
+	JIKAN = ('時間', re.compile(r"(\d+):(\d+)-(\d+):(\d+)"), "勤務可能な方")
 
 	def bracket(self):
 		return f"【{self.value[0]}】"
 	def pattern(self):
-		return re.compile(self.value[1])
+		return self.value[1]
+	def find_all(self, s: str):
+		sub_s = re.sub(r'[~〜～]', '-', s)
+		norm_arg = normalize('NFKC', sub_s)
+		return self.value[1].findall(norm_arg)
 @dataclass
 class Header:
 	START = "募集内容"
@@ -39,6 +44,9 @@ class FromToDate:
 	frm: tuple[str, str, str]
 	to: tuple[str, str, str]
 
+@dataclass
+class Jikan:
+	frm_to: tuple[str, str, str, str]
 @dataclass
 class HeaderContent:
 	header: Header
@@ -53,14 +61,35 @@ class HeaderContent:
 		if not found:
 			raise ValueError("No kikan title found!")
 		kikan_list: list[FromToDate] = []
-		for n, line in enumerate(self.content[m:]):
-			if (mch:=JobDateTime.KIKAN.pattern().match(line.strip())):
-				ftd = FromToDate(mch.groups()[0:3],mch.groups()[3:6])
-				kikan_list.append(ftd)
+		kikan_match = JobDateTime.KIKAN.find_all
+		jikan_bracket = JobDateTime.JIKAN.bracket()
+		jikan_found = False
+		for n, line in enumerate(self.content[m+1:]):
+			if (mch:=kikan_match(line.strip())):
+				for mc in mch:
+					ftd = FromToDate(*mc) # h.groups()[0:3],mch.groups()[3:6])
+					kikan_list.append(ftd)
+			elif line.strip() == jikan_bracket:
+				jikan_found = True
+				break
 		if not kikan_list:
 			raise ValueError("No kikan(s) found!")
-		return kikan_list
+		if not jikan_found:
+			raise ValueError("No jikan found!")
+		return kikan_list, n + m
 		
+	def get_jikan(self, m: int):
+		assert self.content[m+1] == JobDateTime.JIKAN.bracket() 
+		jikan_match = JobDateTime.JIKAN.find_all
+		jikan = None
+		for n, line in enumerate(self.content[m+1:]):
+			if (mch:=jikan_match(line.strip())):
+				#groups = mch.groups()
+				jikan = Jikan(mch)#groups)
+				break
+		if not jikan:
+			raise ValueError("No jikan found!")
+		return jikan
 
 
 		
@@ -94,15 +123,18 @@ def load():
 
 def divide():
 	leading = divide_start()
+	count = 0
 	while (header_line := get_header()):
 		header = load_header([header_line])
 		content, end_line = get_content()
 		header_content = HeaderContent(header=header, content=content)
-		kk_list = header_content.kikan_list()
-		print(f"{header_content.header=}, {kk_list=}")
+		kk_list, kikan_pos = header_content.kikan_list()
+		jikan = header_content.get_jikan(kikan_pos)
+		print(f"{count+1}: {header_content.header=}, {kk_list=}, {jikan=}")
 		print()
 		if end_line:
 			break
+		count += 1
 	print()
 	print()
 	print(leading)
