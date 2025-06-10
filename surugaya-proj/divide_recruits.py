@@ -20,25 +20,30 @@ IN_HEADER = False
 
 DATE_TIME_BRACKET_PAIR = '【】'
 WEEKDAYS_KANJI = '日月火水木金土'
-
+DATE_PATT = rf"(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)"
+TIME_PATT = r"(\d+):(\d+)"
+TIL = '~'
 class JobDateTime(Enum):
-	KIKAN = ('募集期間', re.compile(rf"(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)"), '')
-	JIKAN = ('時間', re.compile(r"(\d+):(\d+)-(\d+):(\d+)"), "勤務可能な方")
+	KIKAN = ('募集期間', DATE_PATT + TIL + DATE_PATT, '')
+	JIKAN = ('時間', TIME_PATT + TIL + TIME_PATT, "勤務可能な方")
 
 	def bracket(self):
 		return f"【{self.value[0]}】"
 	def pattern(self):
-		return self.value[1]
+		return re.compile(self.value[1])
 	def find_all(self, s: str):
-		sub_s = re.sub(r'[~〜～]', '-', s)
+		sub_s = re.sub(r'[~〜～]', '~', s)
 		norm_arg = normalize('NFKC', sub_s)
-		return self.value[1].findall(norm_arg)
+		return self.pattern().findall(norm_arg)
 @dataclass
 class Header:
 	START = "募集内容"
 	num: int
 	branch_job: str
 
+@dataclass
+class JobDate:
+	frm: tuple[str, str, str]
 @dataclass
 class FromToDate:
 	frm: tuple[str, str, str]
@@ -61,28 +66,44 @@ class HeaderContent:
 		if not found:
 			raise ValueError("No kikan title found!")
 		kikan_list: list[FromToDate] = []
+		jd_list: list[JobDate] = []
 		kikan_match = JobDateTime.KIKAN.find_all
 		jikan_bracket = JobDateTime.JIKAN.bracket()
 		jikan_found = False
 		for n, line in enumerate(self.content[m+1:]):
 			if (mch:=kikan_match(line.strip())):
 				for mc in mch:
-					ftd = FromToDate(*mc) # h.groups()[0:3],mch.groups()[3:6])
-					kikan_list.append(ftd)
+					jd = FromToDate(mc[0:3], mc[3:6])
+					kikan_list.append(jd)
 			elif line.strip() == jikan_bracket:
 				jikan_found = True
 				break
-		if not kikan_list:
-			raise ValueError("No kikan(s) found!")
 		if not jikan_found:
 			raise ValueError("No jikan found!")
-		return kikan_list, n + m
+		if kikan_list:
+			return kikan_list, n + m
+		else:
+			kij_patt = re.compile(DATE_PATT)
+			for j, line in enumerate(self.content[m+1:m+1+n]):
+				if (mch:=kij_patt.findall(line.strip())):
+					for mc in mch:
+						jd = JobDate(mc)
+						jd_list.append(jd)
+			if not jd_list:
+				raise ValueError("Kijitsu not found!")
+		return jd_list, j + m
 		
 	def get_jikan(self, m: int):
-		assert self.content[m+1] == JobDateTime.JIKAN.bracket() 
+		jikan_hdr = False
+		for n, cnt in enumerate(self.content[m:]):
+			if cnt == JobDateTime.JIKAN.bracket():
+				jikan_hdr = True
+				break
+		if not jikan_hdr:
+			raise ValueError("No Jikan header!")
 		jikan_match = JobDateTime.JIKAN.find_all
 		jikan = None
-		for n, line in enumerate(self.content[m+1:]):
+		for n, line in enumerate(self.content[m+n:]):
 			if (mch:=jikan_match(line.strip())):
 				#groups = mch.groups()
 				jikan = Jikan(mch)#groups)
