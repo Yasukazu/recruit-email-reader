@@ -255,8 +255,14 @@ def load_header(lines):
 
 
 if __name__ == '__main__':
+	mmdd = sys.argv[1]
+	found = None
 	for f in Path().cwd().parent.iterdir():
-		break
+		if f.stem.endswith(mmdd):
+			found = f
+			break
+	if not found:
+		raise ValueError(f"No file found ends with {mmdd}")
 	ini_file = f
 	with ini_file.open() as fi:
 		LINE_FEEDER = fi
