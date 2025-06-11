@@ -8,6 +8,7 @@ from collections import deque
 from pprint import pp
 from pathlib import Path
 from unicodedata import normalize
+from ipdb import set_trace
 
 HEARDER_LINE = '==='
 END_LINE = '---'
@@ -16,13 +17,12 @@ LINE_FEEDER = sys.stdin
 
 IN_HEADER = False
 
-
-
 DATE_TIME_BRACKET_PAIR = '【】'
 WEEKDAYS_KANJI = '日月火水木金土'
 DATE_PATT = rf"(\d+)/(\d+)\(([{WEEKDAYS_KANJI}])\)"
 TIME_PATT = r"(\d+):(\d+)"
 TIL = '~'
+
 class JobDateTime(Enum):
     KIKAN = ('募集期間', DATE_PATT + TIL + DATE_PATT, '')
     JIKAN = ('時間', TIME_PATT + TIL + TIME_PATT, "勤務可能な方")
@@ -40,6 +40,8 @@ class Header:
     START = "募集内容"
     num: int
     branch_job: str
+    def __str__(self):
+        return f"{self.START} {self.num:>2}: {self.branch_job}"
 
 @dataclass
 class JobDate:
@@ -137,12 +139,13 @@ def is_separator(line: str):
                 return sep
 
 LINES: deque[str] = deque()
-def load():
-    while (line:=LINE_FEEDER.readline()):
+
+def load(fi=LINE_FEEDER):
+    while (line:=fi.readline()):
         LINES.append(line.strip())
     LINES.reverse()
 
-def divide():
+def divide(fi=LINE_FEEDER):
     leading = divide_start()
     count = 0
     while (header_line := get_header()):
@@ -151,7 +154,7 @@ def divide():
         header_content = HeaderContent(header=header, content=content)
         kk_list, kikan_pos = header_content.kikan_list()
         jikan = header_content.get_jikan(kikan_pos)
-        print(f"{count+1}: {header_content.header=}, {kk_list=}, {jikan=}")
+        print(f"{count+1}: {header_content.header}, {kk_list=}, {jikan=}")
         print()
         if end_line:
             break
@@ -252,7 +255,11 @@ def load_header(lines):
         raise ValueError("No Bosyu number!")
     return Header(int(tokens[0][i:]), tokens[1])
 
-
+def main(input_filename: str, fi=LINE_FEEDER):
+        input_path = Path().cwd().parent / input_filename
+        with input_path.open() as fi:
+            load(fi)
+            divide(fi)
 
 if __name__ == '__main__':
     from dotenv import load_dotenv
@@ -260,11 +267,7 @@ if __name__ == '__main__':
     import os
     try:
         input_filename = os.environ['RECRUIT_FILE']
-        input_path = Path().cwd().parent / input_filename
-        with input_path.open() as fi:
-            LINE_FEEDER = fi
-            load()
-            divide()
+        main(input_filename)
     except KeyError as err:
         raise ValueError('No env val RECRUIT_FILE is set!') from err
 '''
