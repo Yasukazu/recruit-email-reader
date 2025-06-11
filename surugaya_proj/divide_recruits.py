@@ -24,95 +24,107 @@ TIME_PATT = r"(\d+):(\d+)"
 TIL = '~'
 
 class JobDateTime(Enum):
-    KIKAN = ('募集期間', DATE_PATT + TIL + DATE_PATT, '')
-    JIKAN = ('時間', TIME_PATT + TIL + TIME_PATT, "勤務可能な方")
+	KIKAN = ('募集期間', DATE_PATT + TIL + DATE_PATT, '')
+	JIKAN = ('時間', TIME_PATT + TIL + TIME_PATT, "勤務可能な方")
 
-    def bracket(self):
-        return f"【{self.value[0]}】"
-    def pattern(self):
-        return re.compile(self.value[1])
-    def find_all(self, s: str):
-        sub_s = re.sub(r'[~〜～]', '~', s)
-        norm_arg = normalize('NFKC', sub_s)
-        return self.pattern().findall(norm_arg)
+	def bracket(self):
+		return f"【{self.value[0]}】"
+	def pattern(self):
+		return re.compile(self.value[1])
+	def find_all(self, s: str):
+		sub_s = re.sub(r'[~〜～]', '~', s)
+		norm_arg = normalize('NFKC', sub_s)
+		return self.pattern().findall(norm_arg)
 @dataclass
 class Header:
-    START = "募集内容"
-    num: int
-    branch_job: str
+	START = "募集内容"
+	num: int
+	branch_job: str
+	def __str__(self):
+		return f"{self.START} {self.num:>2}: {self.branch_job}"
+
+@dataclass(init=False)
+class MonthDate:
+    month: int
+    day: int
+    weekday: int
+    def __init__(self, m: str, d: str, w: str):
+        self.month = int(m)
+        self.day = int(d)
+        self.weekday = WEEKDAYS_KANJI.index(w)
     def __str__(self):
-        return f"{self.START} {self.num:>2}: {self.branch_job}"
+        return f"{self.month:<2}/{self.day:<2}({WEEKDAYS_KANJI[self.weekday]})"
 
 @dataclass
 class JobDate:
-    frm: tuple[str, str, str]
+	frm: tuple[str, str, str]
 @dataclass
 class FromToDate:
-    frm: tuple[str, str, str]
-    to: tuple[str, str, str]
+	frm: tuple[str, str, str]
+	to: tuple[str, str, str]
 
 @dataclass
 class Jikan:
-    frm_to: tuple[str, str, str, str]
+	frm_to: tuple[str, str, str, str]
 @dataclass
 class HeaderContent:
-    header: Header
-    content: list[str]
-    def kikan_list(self):
-        found = False
-        kikan_bracket = JobDateTime.KIKAN.bracket()
-        for m, line in enumerate(self.content):
-            if kikan_bracket == line.strip():
-                found = True
-                break
-        if not found:
-            raise ValueError("No kikan title found!")
-        kikan_list: list[FromToDate] = []
-        jd_list: list[JobDate] = []
-        kikan_match = JobDateTime.KIKAN.find_all
-        jikan_bracket = JobDateTime.JIKAN.bracket()
-        jikan_found = False
-        for n, line in enumerate(self.content[m+1:]):
-            if (mch:=kikan_match(line.strip())):
-                for mc in mch:
-                    jd = FromToDate(mc[0:3], mc[3:6])
-                    kikan_list.append(jd)
-            elif line.strip() == jikan_bracket:
-                jikan_found = True
-                break
-        if not jikan_found:
-            raise ValueError("No jikan found!")
-        if kikan_list:
-            return kikan_list, n + m
-        else:
-            kij_patt = re.compile(DATE_PATT)
-            for j, line in enumerate(self.content[m+1:m+1+n]):
-                if (mch:=kij_patt.findall(line.strip())):
-                    for mc in mch:
-                        jd = JobDate(mc)
-                        jd_list.append(jd)
-            if not jd_list:
-                raise ValueError("Kijitsu not found!")
-        return jd_list, j + m
+	header: Header
+	content: list[str]
+	def kikan_list(self):
+		found = False
+		kikan_bracket = JobDateTime.KIKAN.bracket()
+		for m, line in enumerate(self.content):
+			if kikan_bracket == line.strip():
+				found = True
+				break
+		if not found:
+			raise ValueError("No kikan title found!")
+		kikan_list: list[FromToDate] = []
+		jd_list: list[JobDate] = []
+		kikan_match = JobDateTime.KIKAN.find_all
+		jikan_bracket = JobDateTime.JIKAN.bracket()
+		jikan_found = False
+		for n, line in enumerate(self.content[m+1:]):
+			if (mch:=kikan_match(line.strip())):
+				for mc in mch:
+					jd = FromToDate(mc[0:3], mc[3:6])
+					kikan_list.append(jd)
+			elif line.strip() == jikan_bracket:
+				jikan_found = True
+				break
+		if not jikan_found:
+			raise ValueError("No jikan found!")
+		if kikan_list:
+			return kikan_list, n + m
+		else:
+			kij_patt = re.compile(DATE_PATT)
+			for j, line in enumerate(self.content[m+1:m+1+n]):
+				if (mch:=kij_patt.findall(line.strip())):
+					for mc in mch:
+						jd = JobDate(mc)
+						jd_list.append(jd)
+			if not jd_list:
+				raise ValueError("Kijitsu not found!")
+		return jd_list, j + m
 
-    def get_jikan(self, m: int):
-        jikan_hdr = False
-        for n, cnt in enumerate(self.content[m:]):
-            if cnt == JobDateTime.JIKAN.bracket():
-                jikan_hdr = True
-                break
-        if not jikan_hdr:
-            raise ValueError("No Jikan header!")
-        jikan_match = JobDateTime.JIKAN.find_all
-        jikan = None
-        for n, line in enumerate(self.content[m+n:]):
-            if (mch:=jikan_match(line.strip())):
-                #groups = mch.groups()
-                jikan = Jikan(mch)#groups)
-                break
-        if not jikan:
-            raise ValueError("No jikan found!")
-        return jikan
+	def get_jikan(self, m: int):
+		jikan_hdr = False
+		for n, cnt in enumerate(self.content[m:]):
+			if cnt == JobDateTime.JIKAN.bracket():
+				jikan_hdr = True
+				break
+		if not jikan_hdr:
+			raise ValueError("No Jikan header!")
+		jikan_match = JobDateTime.JIKAN.find_all
+		jikan = None
+		for n, line in enumerate(self.content[m+n:]):
+			if (mch:=jikan_match(line.strip())):
+				#groups = mch.groups()
+				jikan = Jikan(mch)#groups)
+				break
+		if not jikan:
+			raise ValueError("No jikan found!")
+		return jikan
 
 
 
@@ -120,165 +132,165 @@ class HeaderContent:
 HEADER_CONTENT_LIST: list[HeaderContent] = []
 
 class TextEndException(Exception):
-    pass
+	pass
 class HeaderEnd(TextEndException):
-    pass
+	pass
 class ContentEnd(TextEndException):
-    pass
+	pass
 
 class LineSeparator(Enum):
-    HEARDER_LINE_SEP = '='
-    END_LINE_SEP = '-'
+	HEARDER_LINE_SEP = '='
+	END_LINE_SEP = '-'
 
 def is_separator(line: str):
-    for sep in list(LineSeparator):
-        cc = {c == sep.value for c in line}
-        if len(cc) == 1:
-            tf = cc.pop()
-            if tf:
-                return sep
+	for sep in list(LineSeparator):
+		cc = {c == sep.value for c in line}
+		if len(cc) == 1:
+			tf = cc.pop()
+			if tf:
+				return sep
 
 LINES: deque[str] = deque()
 
 def load(fi=LINE_FEEDER):
-    while (line:=fi.readline()):
-        LINES.append(line.strip())
-    LINES.reverse()
+	while (line:=fi.readline()):
+		LINES.append(line.strip())
+	LINES.reverse()
 
 def divide(fi=LINE_FEEDER):
-    leading = divide_start()
-    count = 0
-    while (header_line := get_header()):
-        header = load_header([header_line])
-        content, end_line = get_content()
-        header_content = HeaderContent(header=header, content=content)
-        kk_list, kikan_pos = header_content.kikan_list()
-        jikan = header_content.get_jikan(kikan_pos)
-        print(f"{count+1}: {header_content.header}, {kk_list=}, {jikan=}")
-        print()
-        if end_line:
-            break
-        count += 1
-    print()
-    print()
-    print(leading)
+	leading = divide_start()
+	count = 0
+	while (header_line := get_header()):
+		header = load_header([header_line])
+		content, end_line = get_content()
+		header_content = HeaderContent(header=header, content=content)
+		kk_list, kikan_pos = header_content.kikan_list()
+		jikan = header_content.get_jikan(kikan_pos)
+		print(f"{count+1}: {header_content.header}, {kk_list=}, {jikan=}")
+		print()
+		if end_line:
+			break
+		count += 1
+	print()
+	print()
+	print(leading)
 
 def divide_start():
-    leading = []
-    while (len(LINES) > 1):
-        line = LINES.pop()
-        leading.append(line)
-        if not line:
-            continue
-        sep = is_separator(line)
-        if sep:
-            match sep:
-                case LineSeparator.END_LINE_SEP:
-                    raise EOFError("End of contents.")
-                case LineSeparator.HEARDER_LINE_SEP:
-                    # LINES.append(line)
-                    return leading
-    raise ValueError("No Header line!")
+	leading = []
+	while (len(LINES) > 1):
+		line = LINES.pop()
+		leading.append(line)
+		if not line:
+			continue
+		sep = is_separator(line)
+		if sep:
+			match sep:
+				case LineSeparator.END_LINE_SEP:
+					raise EOFError("End of contents.")
+				case LineSeparator.HEARDER_LINE_SEP:
+					# LINES.append(line)
+					return leading
+	raise ValueError("No Header line!")
 
 def get_header():
-    header = None
-    while len(LINES) > 0:
-        line = LINES.pop()
-        if not line:
-            continue
-        sep = is_separator(line)
-        if sep:
-            match sep:
-                case LineSeparator.END_LINE_SEP:
-                    raise EOFError("End of contents.")
-                case LineSeparator.HEARDER_LINE_SEP:
-                    raise ValueError("No Header line!")
-        else:
-            header = line
-            break
-    if not header:
-        raise ValueError("No Header line!")
-    closing_header_line = False
-    while len(LINES) > 0:
-        line = LINES.pop()
-        if not line:
-            continue
-        sep = is_separator(line)
-        if sep:
-            match sep:
-                case LineSeparator.END_LINE_SEP:
-                    raise EOFError("End of contents.")
-                case LineSeparator.HEARDER_LINE_SEP:
-                    closing_header_line = True
-                    break
-        else:
-            header += line
-    if not closing_header_line:
-        raise ValueError("No closing Header line!")
-    return header
+	header = None
+	while len(LINES) > 0:
+		line = LINES.pop()
+		if not line:
+			continue
+		sep = is_separator(line)
+		if sep:
+			match sep:
+				case LineSeparator.END_LINE_SEP:
+					raise EOFError("End of contents.")
+				case LineSeparator.HEARDER_LINE_SEP:
+					raise ValueError("No Header line!")
+		else:
+			header = line
+			break
+	if not header:
+		raise ValueError("No Header line!")
+	closing_header_line = False
+	while len(LINES) > 0:
+		line = LINES.pop()
+		if not line:
+			continue
+		sep = is_separator(line)
+		if sep:
+			match sep:
+				case LineSeparator.END_LINE_SEP:
+					raise EOFError("End of contents.")
+				case LineSeparator.HEARDER_LINE_SEP:
+					closing_header_line = True
+					break
+		else:
+			header += line
+	if not closing_header_line:
+		raise ValueError("No closing Header line!")
+	return header
 
 def get_content():
-    content = []
-    end_line = False
-    while len(LINES) > 0:
-        line = LINES.pop()
-        sep = is_separator(line)
-        if sep:
-            match sep:
-                case LineSeparator.END_LINE_SEP:
-                    end_line = True
-                    break
-                case LineSeparator.HEARDER_LINE_SEP:
-                    break
-        else:
-            content.append(line)
-    if not content:
-        raise ValueError("No content!")
-    return content, end_line
+	content = []
+	end_line = False
+	while len(LINES) > 0:
+		line = LINES.pop()
+		sep = is_separator(line)
+		if sep:
+			match sep:
+				case LineSeparator.END_LINE_SEP:
+					end_line = True
+					break
+				case LineSeparator.HEARDER_LINE_SEP:
+					break
+		else:
+			content.append(line)
+	if not content:
+		raise ValueError("No content!")
+	return content, end_line
 
 def load_header(lines):
-    line = None
-    for n, line in enumerate(lines):
-        if line:
-            break
+	line = None
+	for n, line in enumerate(lines):
+		if line:
+			break
 
-    if not line:
-        raise ValueError('No header content found!')
-    line = line.replace('　', ' ')
-    tokens = line.split(maxsplit=1)
+	if not line:
+		raise ValueError('No header content found!')
+	line = line.replace('　', ' ')
+	tokens = line.split(maxsplit=1)
 
-    i = -1
-    for i, c in enumerate(tokens[0]):
-        if c.isdigit():
-            break
-    if i < 0:
-        raise ValueError("No Bosyu number!")
-    return Header(int(tokens[0][i:]), tokens[1])
+	i = -1
+	for i, c in enumerate(tokens[0]):
+		if c.isdigit():
+			break
+	if i < 0:
+		raise ValueError("No Bosyu number!")
+	return Header(int(tokens[0][i:]), tokens[1])
 
 def main(input_filename: str, fi=LINE_FEEDER):
-        input_path = Path().cwd().parent / input_filename
-        with input_path.open() as fi:
-            load(fi)
-            divide(fi)
+		input_path = Path().cwd().parent / input_filename
+		with input_path.open() as fi:
+			load(fi)
+			divide(fi)
 
 if __name__ == '__main__':
-    from dotenv import load_dotenv
-    load_dotenv()
-    import os
-    try:
-        input_filename = os.environ['RECRUIT_FILE']
-        main(input_filename)
-    except KeyError as err:
-        raise ValueError('No env val RECRUIT_FILE is set!') from err
+	from dotenv import load_dotenv
+	load_dotenv()
+	import os
+	try:
+		input_filename = os.environ['RECRUIT_FILE']
+		main(input_filename)
+	except KeyError as err:
+		raise ValueError('No env val RECRUIT_FILE is set!') from err
 '''
-    if len(sys.argv) < 2:
-        print("Recruit email content formatter: Needs datespec like 0131 as file stem end. Data file location is the parent directory.")
-        sys.exit(1)
-    mmdd = sys.argv[1]
-    found = None
-    for f in .iterdir():
-        if f.stem.endswith(mmdd):
-            found = f
-            break
-    if not found:
-        raise ValueError(f"No file found ends with {mmdd}")'''
+	if len(sys.argv) < 2:
+		print("Recruit email content formatter: Needs datespec like 0131 as file stem end. Data file location is the parent directory.")
+		sys.exit(1)
+	mmdd = sys.argv[1]
+	found = None
+	for f in .iterdir():
+		if f.stem.endswith(mmdd):
+			found = f
+			break
+	if not found:
+		raise ValueError(f"No file found ends with {mmdd}")'''
