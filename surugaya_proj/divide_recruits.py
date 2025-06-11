@@ -1,5 +1,5 @@
 # divide recruits
-from typing import TextIO
+from typing import TextIO, Sequence
 from dataclasses import dataclass
 import sys
 from enum import Enum
@@ -61,8 +61,8 @@ class FromToDate:
 	frm: JobDate # tuple[str, str, str]
 	to: JobDate # tuple[str, str, str]
 	def __init__(self, f: Sequence[str], t: Sequence[str]):
-		frm = JobDate(*f)
-		to = JobDate(*t)
+		self.frm = JobDate(*f)
+		self.to = JobDate(*t)
 	def __str__(self):
 		return f"{self.frm} - {self.to}"
 
@@ -139,7 +139,8 @@ class HeaderContent:
 		for n, line in enumerate(self.content[m+n:]):
 			if (mch:=jikan_match(line.strip())):
 				#groups = mch.groups()
-				jikan = Jikan(mch)#groups)
+				assert len(mch[0]) == 4
+				jikan = Jikan(*mch[0])#groups)
 				break
 		if not jikan:
 			raise ValueError("No jikan found!")
@@ -193,7 +194,6 @@ def divide(fi=LINE_FEEDER):
 		if end_line:
 			break
 		count += 1
-	print()php
 	print()
 	print(leading)
 
