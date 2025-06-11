@@ -44,28 +44,48 @@ class Header:
 		return f"{self.START} {self.num:>2}: {self.branch_job}"
 
 @dataclass(init=False)
-class MonthDate:
-    month: int
-    day: int
-    weekday: int
-    def __init__(self, m: str, d: str, w: str):
-        self.month = int(m)
-        self.day = int(d)
-        self.weekday = WEEKDAYS_KANJI.index(w)
-    def __str__(self):
-        return f"{self.month:<2}/{self.day:<2}({WEEKDAYS_KANJI[self.weekday]})"
-
-@dataclass
 class JobDate:
-	frm: tuple[str, str, str]
-@dataclass
-class FromToDate:
-	frm: tuple[str, str, str]
-	to: tuple[str, str, str]
+	month: int
+	day: int
+	weekday: int
+	def __init__(self, m: str, d: str, w: str):
+		self.month = int(m)
+		self.day = int(d)
+		self.weekday = WEEKDAYS_KANJI.index(w)
+	def __str__(self):
+		return f"{self.month:<2}/{self.day:<2}({WEEKDAYS_KANJI[self.weekday]})"
 
-@dataclass
+
+@dataclass(init=False)
+class FromToDate:
+	frm: JobDate # tuple[str, str, str]
+	to: JobDate # tuple[str, str, str]
+	def __init__(self, f: Sequence[str], t: Sequence[str]):
+		frm = JobDate(*f)
+		to = JobDate(*t)
+	def __str__(self):
+		return f"{self.frm} - {self.to}"
+
+@dataclass(init=False)
+class HrMin:
+	hr: int
+	mn: int
+	def __init__(self, h: str, m: str):
+		self.hr = int(h)
+		self.mn = int(m)
+	def __str__(self):
+		return f"{self.hr:02}:{self.mn:02}"
+
+@dataclass(init=False)
 class Jikan:
-	frm_to: tuple[str, str, str, str]
+	frm: HrMin
+	to: HrMin # frm_to: tuple[str, str, str, str]
+	def __init__(self, fh: str, fm: str, th: str, tm: str):
+		self.frm = HrMin(fh, fm)
+		self.to = HrMin(th, tm)
+	def __str__(self):
+		return f"{self.frm} - {self.to}"
+
 @dataclass
 class HeaderContent:
 	header: Header
@@ -78,7 +98,7 @@ class HeaderContent:
 				found = True
 				break
 		if not found:
-			raise ValueError("No kikan title found!")
+			raise ValphpueError("No kikan title found!")
 		kikan_list: list[FromToDate] = []
 		jd_list: list[JobDate] = []
 		kikan_match = JobDateTime.KIKAN.find_all
@@ -106,7 +126,6 @@ class HeaderContent:
 			if not jd_list:
 				raise ValueError("Kijitsu not found!")
 		return jd_list, j + m
-
 	def get_jikan(self, m: int):
 		jikan_hdr = False
 		for n, cnt in enumerate(self.content[m:]):
@@ -166,12 +185,15 @@ def divide(fi=LINE_FEEDER):
 		header_content = HeaderContent(header=header, content=content)
 		kk_list, kikan_pos = header_content.kikan_list()
 		jikan = header_content.get_jikan(kikan_pos)
-		print(f"{count+1}: {header_content.header}, {kk_list=}, {jikan=}")
+		print(f"{count+1}: {header_content.header}")
+		for kk in kk_list:
+			print(kk)
+		print(jikan)
 		print()
 		if end_line:
 			break
 		count += 1
-	print()
+	print()php
 	print()
 	print(leading)
 
@@ -258,7 +280,6 @@ def load_header(lines):
 		raise ValueError('No header content found!')
 	line = line.replace('　', ' ')
 	tokens = line.split(maxsplit=1)
-
 	i = -1
 	for i, c in enumerate(tokens[0]):
 		if c.isdigit():
